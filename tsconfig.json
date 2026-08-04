@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "incremental": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+
+    // NOTE: "node" is the default module resolution strategy in TypeScript, 
+    // but "bundler" is recommended for Next.js projects to better handle modern 
+    // JavaScript features and optimizations.
+    // ++ node as moduleResolution is also depricated for further TS versions
+    // "moduleResolution": "node",
+
+    "moduleResolution": "bundler",
+
+    // NOTE: The "ignoreDeprecations" option is used to suppress deprecation warnings in TypeScript.
+    // However, it is not recommended to ignore deprecations as it can lead to using
+    // outdated or unsafe code. Feel free to uncomment as needed.
+    
+    // "ignoreDeprecations": "6.0",
+
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

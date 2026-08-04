@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --app-bg-default: #f8fafc;
+  --app-bg-paper: #ffffff;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: #475569;
+  --app-border: #e2e8f0;
+  --app-primary: #2563eb;
+  --app-primary-contrast: #ffffff;
+  --app-secondary: #0f766e;
+
+  --background: var(--app-bg-default);
+  --foreground: var(--app-text-primary);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Leaflet map hint tooltip override */
+.map-hint-tooltip {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  color: #475569 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 6px 12px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+}
+
+.map-hint-tooltip::before {
+  display: none !important;
+}
+
+/* Leaflet controls z-index fix for MUI modals */
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 800 !important;
+}
+
