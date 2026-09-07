@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Box, CircularProgress, Stack, TextField, Typography, Chip } from "@mui/material";
+import { Box, CircularProgress, Stack, TextField, Typography, Chip, Autocomplete } from "@mui/material";
 import { MapPin, Crosshair } from "lucide-react";
+import type { Map as LeafletMap, Marker as LeafletMarker, LeafletMouseEvent } from "leaflet";
+import { olongapoBarangays } from "../data/auth";
 
 const OLONGAPO_CENTER: [number, number] = [14.8383, 120.2839];
 const OLONGAPO_BOUNDS = {
@@ -42,6 +44,38 @@ function isInsideOlongapo(lat: number, lng: number) {
 	);
 }
 
+function resolveOlongapoBarangay(detectedStreet: string, rawBarangay: string, displayName: string): string {
+	const combinedText = `${detectedStreet} ${rawBarangay} ${displayName}`.toLowerCase();
+
+	// Specific fix for Tabacuhan / Sta. Rita / Santa Rita streets and areas
+	if (
+		combinedText.includes("tabacuhan") ||
+		combinedText.includes("sta. rita") ||
+		combinedText.includes("sta rita") ||
+		combinedText.includes("santa rita")
+	) {
+		return "Santa Rita";
+	}
+
+	// Attempt to match rawBarangay with known Olongapo barangays
+	if (rawBarangay) {
+		const lowerRaw = rawBarangay.toLowerCase();
+		const matched = olongapoBarangays.find(
+			(b) => b.toLowerCase() === lowerRaw || lowerRaw.includes(b.toLowerCase())
+		);
+		if (matched) return matched;
+	}
+
+	// Check if any barangay name appears in combinedText
+	for (const b of olongapoBarangays) {
+		if (combinedText.includes(b.toLowerCase())) {
+			return b;
+		}
+	}
+
+	return rawBarangay;
+}
+
 export default function MapAddressPicker({
 	street,
 	barangay,
@@ -50,8 +84,8 @@ export default function MapAddressPicker({
 	barangayError,
 }: MapAddressPickerProps) {
 	const mapContainerRef = useRef<HTMLDivElement>(null);
-	const mapRef = useRef<any>(null);
-	const markerRef = useRef<any>(null);
+	const mapRef = useRef<LeafletMap | null>(null);
+	const markerRef = useRef<LeafletMarker | null>(null);
 	const [isGeocoding, setIsGeocoding] = useState(false);
 	const [pinPlaced, setPinPlaced] = useState(false);
 	const [outsideBounds, setOutsideBounds] = useState(false);
@@ -68,9 +102,8 @@ export default function MapAddressPicker({
 
 			// Guard: if the DOM container already has a Leaflet instance (React Strict
 			// Mode double-mount), remove it first to avoid "already initialized" error.
-			const container = mapContainerRef.current as any;
-			if (container._leaflet_id) {
-				// @ts-ignore – internal Leaflet API to reset the container
+			const container = mapContainerRef.current as (HTMLDivElement & { _leaflet_id?: number | null }) | null;
+			if (container?._leaflet_id) {
 				container._leaflet_id = null;
 			}
 
@@ -82,7 +115,7 @@ export default function MapAddressPicker({
 			}
 
 			// Fix default icon paths broken by webpack
-			delete (L.Icon.Default.prototype as any)._getIconUrl;
+			delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
 			L.Icon.Default.mergeOptions({
 				iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
 				iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -110,7 +143,7 @@ export default function MapAddressPicker({
 				.setContent("📍 Tap your location in Olongapo City")
 				.addTo(map);
 
-			map.on("click", async (e: any) => {
+			map.on("click", async (e: LeafletMouseEvent) => {
 				const { lat, lng } = e.latlng;
 
 				if (!isInsideOlongapo(lat, lng)) {
@@ -141,9 +174,9 @@ export default function MapAddressPicker({
 					);
 					const data: NominatimResult = await res.json();
 
-					const addr = data.address;
+					const addr = data.address ?? {};
 					const detectedStreet = addr.road ?? "";
-					const detectedBarangay =
+					const rawBarangay =
 						addr.suburb ??
 						addr.quarter ??
 						addr.village ??
@@ -151,7 +184,9 @@ export default function MapAddressPicker({
 						addr.neighbourhood ??
 						"";
 
-					onAddressChange(detectedStreet, detectedBarangay);
+					const resolvedBarangay = resolveOlongapoBarangay(detectedStreet, rawBarangay, data.display_name ?? "");
+
+					onAddressChange(detectedStreet, resolvedBarangay);
 				} catch {
 					// Reverse geocode failed — leave fields blank for manual entry
 				} finally {
@@ -180,7 +215,7 @@ export default function MapAddressPicker({
 			<Stack direction="row" alignItems="center" spacing={0.8}>
 				<Crosshair size={16} style={{ color: "#11998e" }} />
 				<Typography variant="caption" color="text.secondary" fontWeight={500}>
-					Tap on the map to auto-fill your street and barangay
+					Tap on the map to auto-fill, or type your street and barangay manually
 				</Typography>
 			</Stack>
 
@@ -250,31 +285,39 @@ export default function MapAddressPicker({
 				</Typography>
 			)}
 
-			{/* Editable street field (auto-filled from reverse geocode) */}
+			{/* Editable street field (auto-filled from reverse geocode or manual typing) */}
 			<TextField
 				fullWidth
 				required
 				label="Street"
 				size="small"
 				value={street}
+				onChange={(e) => onAddressChange(e.target.value, barangay)}
 				error={Boolean(streetError)}
-				helperText={streetError ?? "Tap the map to fill this field"}
-				InputProps={{ readOnly: true }}
-				sx={{ '& .MuiInputBase-input': { cursor: 'default' } }}
+				helperText={streetError ?? "Tap map to auto-fill, or type your street manually"}
 			/>
 
-			{/* Editable barangay field (auto-filled from reverse geocode) */}
-			<TextField
-				fullWidth
-				required
-				label="Barangay"
-				size="small"
+			{/* Editable barangay field (auto-filled from reverse geocode, dropdown or manual typing) */}
+			<Autocomplete
+				freeSolo
+				options={olongapoBarangays}
 				value={barangay}
-				error={Boolean(barangayError)}
-				helperText={barangayError ?? "Tap the map to fill this field"}
-				InputProps={{ readOnly: true }}
-				sx={{ '& .MuiInputBase-input': { cursor: 'default' } }}
+				onInputChange={(_event, newValue) => {
+					onAddressChange(street, newValue);
+				}}
+				renderInput={(params) => (
+					<TextField
+						{...params}
+						fullWidth
+						required
+						label="Barangay"
+						size="small"
+						error={Boolean(barangayError)}
+						helperText={barangayError ?? "Tap map to auto-fill, or select/type your barangay"}
+					/>
+				)}
 			/>
 		</Stack>
 	);
 }
+
